@@ -1,0 +1,10 @@
+1. a0-a7 are used to store function arguments, with'a0-a1' also capable of storing return values. For the 'printf' call, the value '13' is stored in 'a2', as indicated by the assembly instruction 'li a2,13' in the 'main' function.
+2. There was no function call involved. Instead, the function g was inlined into f, and then f was further inlined into main. From the assembly code in the main function, the instruction li a1, 12 shows that the final result, 12, was directly passed to a1.
+3.auipc ra, 0x0: This instruction takes the immediate value, shifts it right by 12 bits, adds the value of the program counter (PC) to it, and then stores the result in the ra (return address) register. Since the immediate value is 0, the ra register will simply be assigned the value of the pc, which is 0x30.
+jalr 1536(ra): This instruction adds the immediate value 1536 to the value stored in the ra register and assigns the result to the pc, effectively jumping to that address. Converting 1536 to hexadecimal gives 0x600. Adding this to the ra value 0x30 results in 0x0000000000000630, which is the address to jump to, in this case, the address of the printf function.
+4. ra寄存器用来保存函数执行以后的下一条指令的地址，因此ra寄存器应当存放从printf返回main函数的地址，为0x38。
+5. ----%x表示以十六进制形式输出整数，因此首先将57616转为16进制数，为0xe110。
+----%s表示按照字符的格式读取字符并输出，直到读取到 ‘\0’ 为止。RISC-V是小端字节序，因此在内存中存储的形式为0x726c6400。对应的ASCII值为0x72=‘r’，0x6c=‘l’，0x64=‘d’，0x00=‘\0’。
+----因此最后printf输出的结果为"He110, World\0"。
+6.  不需要，i要反转
+7.  printf需要接收2个参数，将第一个参数3放在a1中，第二个参数放在a2中。由于没有第二个参数，所有直接输出寄存器a2中的值。 
