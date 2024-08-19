@@ -1,0 +1,13 @@
+thread_switch needs to save/restore only the callee-save registers . Why?
+
+    因为我们是通过thread_swtich以函数调用的形式切换线程，抛去线程相关的寄存器ra、sp需要被保存，剩下的需要保存的，就是可能被 [被调用过程改变的寄存器]，也即 被调用者保存的寄存器.
+    因为我们将线程切换包装成了函数调用的形式，正常C code中 A调用B（A函数B函数都是用C代码写的），那么编译器编译之后，会生成如下汇编代码：A调用B之前会自动的保存调用者保存的寄存器，进入B之后，B会自动的保存被调用者保存的寄存器。那么在本节中，B就是swtch函数，可是由于该函数是汇编编写，无需如Ccode一样编译成汇编，也就不会生成：进入B之后，自动的保存被调用者保存的寄存器 的 汇编代码。故这个swtch函数中，保存被调用者保存的寄存器的函数是由我们用汇编编写的。故swtch函数中需要保存 reg sa , sp 以及 被调用者保存寄存器
+    而相比之下 trampoline中 就不只是保存 被调用者保存的寄存器；因为user thread 切换成 kernel thread 并不是 C code中调用的函数调用，也即这个上下文切换并不是以函数调用的形式，程序在运行时可能随时会通过trampoline（如定时器中断）进入内核（如在正在执行密集计算指令的时候），并不是C代码通过函数调用进行的切换，属于是在某函数运行的中间突然触发切换，本身该函数的C代码编译后也并没有对这种情况进行处理，故我们在trampoline需要保存大量寄存器，既有caller 也有 callee(被调用者保存)
+    uthread程序执行流程：
+            main thread : thread_init -> thread_createabc -> thread_scheduler -> thread a/b/c
+            thread a/b/c: running func -> yield -> running func
+            end: scheduler -> no runnable process -> exit(-1)
+
+        This sets a breakpoint at line 60 of uthread.c. The breakpoint may (or may not) be triggered before you even run uthread. How could that happen?
+
+                因为gdb的实现依赖于监视pc寄存器，我们在b some_func的时候实际上是记录的某个地址。如果uthread内的指令地址与内核的指令地址有重复，那么当内核运行到这个地址的时候就会触发本应该在uthread内的断点。此外，很容易验证不同的用户态程序也会干扰。比如在uthread内部的0x3b之类的地址打下个断点，再运行ls或者其他用户态程序，如果在0x3b地址的指令是合法的，那么也会触发本应该在uthread程序内部的断点。
