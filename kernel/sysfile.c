@@ -14,7 +14,7 @@
 #include "fs.h"
 #include "sleeplock.h"
 #include "file.h"
-#include "fcntl.h"
+#include "kernel/fcntl.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -484,3 +484,80 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_mmap(void)
+{
+  uint64 addr;
+  int length;
+  int prot;
+  int flags;
+  int fd;
+  struct file *mfile;
+  int offset;
+  uint64 mmap_error = 0xffffffffffffffff;
+
+  if(argaddr(0,&addr)||argint(1,&length)||argint(2,&prot)||argint(3,&flags)||argint(4,&fd,&mfile)||argint(5,&offset)){
+    return mmap_error;
+  }
+
+  if(!mfile->writable && (prot & PROT_WRITE) && (flags == MAP_SHARED))
+    return mmap_error;
+
+  struct proc *p=myproc();
+
+  if(p->sz > MAXVA - length)
+    return mmap_error;
+
+  for(int i=0;i<MAXMMAP; i++){
+    if(p->map_addr[i].used ==0)
+    {
+      p->map_addr[i].used =1;
+      p->map_addr[i].addr=p->sz;
+      p->map_addr[i].length=length;
+      p->map_addr[i].prot=prot;
+      p->map_addr[i].flags=flags;
+      p->mao_addr[i].fd=fd;
+      p->map_addr[i].mfile=mfile;
+      p->map_addr[i].offset=offset;
+
+      filedup(mfile);
+      p->sz=p->sz+length;
+
+      return p->map_addr[i].addr;
+    }
+  }
+
+  return mmap_error;
+}
+
+uint64
+sys_munmap(void)
+{
+  uint64 addr;
+  int length;
+  if(argaddr(0,&addr)|| argint(1,&length))
+    return -1;
+
+  struct proc *p=myproc();
+
+  for(int i=0;i<MAXMMAP;i++){
+    if((p->map_addr[i].addr==addr)||(p->map_addr[i].addr+p->map.addr[i].length==addr+length)){
+      if(p->map_addr[i].addr==addr) p->map_addr[i].addr+=length;
+      p->map_addr[i].length -=length;
+      if((p->map_addr[i].flags & MAP_SHARED) && (p->map_addr[i].prot & PROT_WRITE))
+        filewrite(p->map_addr[i].mfile,addr,length);
+
+      uvmunmap(p->pagetable,addr,length/PGSIZE,1);
+
+      if(p->map_addr[i].length==0)
+      {
+        fileclose(p->map_addr[i].mfile);
+        p->map_addr[i].used=0;
+      }
+      break;
+    }
+  }
+  return 0;
+}
+

@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -291,14 +292,18 @@ fork(void)
   np->trapframe->a0 = 0;
 
   // increment reference counts on open file descriptors.
-  for(i = 0; i < NOFILE; i++)
-    if(p->ofile[i])
-      np->ofile[i] = filedup(p->ofile[i]);
-  np->cwd = idup(p->cwd);
+  for(i = 0; i < MAXMMAP; i++){
+    if(p->map_addr[i].used){
+      memmove(&(np->map_addr[i]),&(p->map_addr[i]),sizeof(p->map_addr[i]));
+      filedup(p->map_addr[i].mfile);
+    }
+     // np->ofile[i] = filedup(p->ofile[i]);
+    }
+ // np->cwd = idup(p->cwd);
 
-  safestrcpy(np->name, p->name, sizeof(p->name));
+  //safestrcpy(np->name, p->name, sizeof(p->name));
 
-  pid = np->pid;
+  //pid = np->pid;
 
   np->state = RUNNABLE;
 
@@ -345,11 +350,16 @@ exit(int status)
     panic("init exiting");
 
   // Close all open files.
-  for(int fd = 0; fd < NOFILE; fd++){
-    if(p->ofile[fd]){
-      struct file *f = p->ofile[fd];
-      fileclose(f);
-      p->ofile[fd] = 0;
+  for(int i = 0; i< MAXMMAP; i++){
+    if(p->map_addr[i].used){
+      if((p->map_addr[i].flags & MAP_SHARED) && (p->map_addr[i].prot & PROT_WRITE))
+        filewrite(p->map_addr[i].mfile,p->map_addr[i].addr,p->map_addr[i].length);
+      fileclose(p->map_addr[i].mfile);
+      uvmunmap(p->pagetable,p->map_addr[i].addr,p->map_addr[i].length/PGSIZE,1);
+      p->map_addr[i].used=0;
+     // struct file *f = p->ofile[fd];
+      //fileclose(f);
+      //p->ofile[fd] = 0;
     }
   }
 
