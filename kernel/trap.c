@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 #include "fcntl.h"
+#include "file.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -87,21 +88,21 @@ usertrap(void)
           }
           memset((void*)pa,0,PGSIZE);
 
-          //struct file* mfile=p->map_addr[i].mfile;
-          ilock(p->map_addr[i].mfile->ip);
+          struct file* mfile=p->map_addr[i].mfile;
+          ilock(mfile->ip);
 
           int offset=PGROUNDDOWN(va-p->map_addr[i].addr);
-          int cnt =readi(p->map_addr[i].mfile->ip,0,pa,offset,PGSIZE);
+          int cnt =readi(mfile->ip,0,pa,offset,PGSIZE);
 
           if(cnt==0)
           {
-            iunlock(p->map_addr[i].mfile->ip);
+            iunlock(mfile->ip);
             kfree((void*)pa);
             p->killed=1;
             break;
           }
 
-          iunlock(p->map_addr[i].mfile->ip);
+          iunlock(mfile->ip);
 
           int flags=PTE_U;
           if(p->map_addr[i].prot & PROT_READ) flags |= PTE_R;

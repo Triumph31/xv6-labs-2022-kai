@@ -92,7 +92,7 @@ struct map_unit
   int prot;
   int flags;
   int fd;
-  struct file* mfile;
+ struct file* mfile; 
   int offset;
 };
 
